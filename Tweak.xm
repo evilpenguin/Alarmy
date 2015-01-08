@@ -6,6 +6,9 @@
  *
  */
 
+#define NSLog(fmt, ...)
+#define UIKitVersionNumber_iOS_8_0_0 1140.10
+
 @interface AlarmManager : NSObject
 	 + (BOOL) isAlarmNotification:(id)arg1;
 @end
@@ -46,6 +49,8 @@ static inline NSInteger AlarmySnoozeIntervalForId(NSString *alarmId) {
 
 #pragma mark - == SBApplication Hooks ==
 
+%group iOS7
+
 %hook SBApplication
 
 - (void) systemLocalNotificationAlertShouldSnooze:(id)alertNotification {
@@ -60,6 +65,32 @@ static inline NSInteger AlarmySnoozeIntervalForId(NSString *alarmId) {
 
 	%orig(alertNotification);
 }
+
+%end
+
+%end //group iOS7
+
+%group iOS8
+
+%hook SBApplication
+
+- (void)scheduleSnoozeNotificationForLocalNotification:(id)notification {
+	if ([objc_getClass("AlarmManager") isAlarmNotification:notification]) {
+		NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:[notification userInfo]];
+		[dict setObject:@(YES) forKey:@"isSnooze"];
+		[notification setUserInfo:dict];
+	}
+
+	%orig(notification);
+}
+
+%end
+
+%end //group iOS8
+
+%group All
+
+%hook SBApplication
 
 - (void) scheduleLocalNotifications:(id)notifications replaceExistingNotifications:(BOOL)replace {
 	if (notifications != nil && [notifications count] > 0) {
@@ -210,12 +241,19 @@ static inline NSInteger AlarmySnoozeIntervalForId(NSString *alarmId) {
 
 %end
 
+%end //group All
+
 %ctor {
 	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 	
 	alarmMappings = [[NSMutableDictionary alloc] initWithContentsOfFile:AlarmyMappingsPath];
 	if (alarmMappings == nil) alarmMappings = [[NSMutableDictionary alloc] init];
-	
-	%init;
+
+	if (kCFCoreFoundationVersionNumber < UIKitVersionNumber_iOS_8_0_0) {
+		%init(iOS7);
+	} else {
+		%init(iOS8);
+	}
+	%init(All);
 	[pool drain];
 }
