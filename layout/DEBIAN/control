@@ -1,6 +1,6 @@
 Package: in.evilpengu.alarmy
 Name: Alarmy
-Version: 0.7.1
+Version: 0.7.2
 Architecture: iphoneos-arm
 Description: An alarm tweak that allows you to choose snooze intervals!
 Maintainer: James Emrich (EvilPenguin)

@@ -1,7 +1,7 @@
 /*
  * Alarmy - a tweak to change the snooze for certain alarms
  * Created by James Emrich (EvilPenguin)
- * Version: 0.7.1
+ * Version: 0.7.2
  *
  * Enjoy (<>..<>)
  *
@@ -120,9 +120,9 @@ static void AlarmySaveIntervalSettings(NSString *interval, NSString *alarmId) {
 
 - (id) initWithAlarm:(id)alarm {
     [[NSNotificationCenter defaultCenter] addObserver:self
-        selector:@selector(keyboardWillShow:)
-        name:UIKeyboardWillShowNotification
-        object:nil];
+                                             selector:@selector(keyboardWillShow:)
+                                                 name:UIKeyboardWillShowNotification
+                                               object:nil];
     return %orig(alarm);
 }
 
@@ -135,10 +135,10 @@ static void AlarmySaveIntervalSettings(NSString *interval, NSString *alarmId) {
 - (void) keyboardWillShow:(NSNotification *)notification {
     EditAlarmView *alarmView = MSHookIvar<EditAlarmView *>(self, "_editAlarmView");	
     [UIView animateWithDuration:0.5f
-        animations: ^ (void) {
-            CGPoint alarmViewPoint = alarmView.frame.origin;
-            alarmView.frame = CGRectMake(alarmViewPoint.x, alarmViewPoint.y - 245.0f, alarmView.frame.size.width, alarmView.frame.size.height);
-        }];
+                     animations: ^ (void) {
+                        CGPoint alarmViewPoint = alarmView.frame.origin;
+                        alarmView.frame = CGRectMake(alarmViewPoint.x, alarmViewPoint.y - 245.0f, alarmView.frame.size.width, alarmView.frame.size.height);
+                    }];
 }
 
 %new
@@ -147,10 +147,10 @@ static void AlarmySaveIntervalSettings(NSString *interval, NSString *alarmId) {
 
     EditAlarmView *alarmView = MSHookIvar<EditAlarmView *>(self, "_editAlarmView");
     [UIView animateWithDuration:0.5f
-        animations: ^ (void) {
-            CGPoint alarmViewPoint = alarmView.frame.origin;
-            alarmView.frame = CGRectMake(alarmViewPoint.x, alarmViewPoint.y + 245.0f, alarmView.frame.size.width, alarmView.frame.size.height);
-        }];
+                     animations: ^ (void) {
+                        CGPoint alarmViewPoint = alarmView.frame.origin;
+                        alarmView.frame = CGRectMake(alarmViewPoint.x, alarmViewPoint.y + 245.0f, alarmView.frame.size.width, alarmView.frame.size.height);
+                     }];
 }
 
 #pragma mark - == Private Methods ==
@@ -220,6 +220,14 @@ static void AlarmySaveIntervalSettings(NSString *interval, NSString *alarmId) {
 
 %ctor {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    
+    // Setup the dictionary of alarmId:interval 
+    NSFileManager *manager = [NSFileManager defaultManager];
+    if (![manager fileExistsAtPath:@"/Library/Application Support/Alarmy"]) {
+        [manager createDirectoryAtPath:@"/Library/Application Support/Alarmy" withIntermediateDirectories:NO attributes:nil error:nil];
+        [manager createFileAtPath:AlarmyMappingsPath contents:nil attributes:nil];
+    }
+
     %init;
     [pool drain];
 }
