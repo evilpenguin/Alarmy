@@ -180,7 +180,7 @@ static void AlarmySaveIntervalSettings(NSString *interval, NSString *alarmId) {
         cell.accessoryType = UITableViewCellAccessoryNone;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
 
-        UIToolbar *toolbar = [[UIToolbar alloc] initWithFrame:CGRectMake(0.0f, 0.0f, cell.frame.size.width, 35.0f)];
+        UIToolbar *toolbar = [[UIToolbar alloc] initWithFrame:CGRectMake(0.0f, 0.0f, cell.bounds.size.width, 35.0f)];
         toolbar.barStyle = UIBarStyleBlackTranslucent;
         toolbar.barTintColor = [UIColor whiteColor];		
 
@@ -189,12 +189,13 @@ static void AlarmySaveIntervalSettings(NSString *interval, NSString *alarmId) {
         [barButtonItem setTitleTextAttributes:@{NSForegroundColorAttributeName:[UIColor redColor]} forState:UIControlStateNormal];
         [toolbar setItems:@[flexibleSpace, barButtonItem]];
 
-        textField = [[UITextField alloc] initWithFrame:CGRectMake(140.0f, 0.0f, cell.frame.size.width - 150.0f, cell.frame.size.height)];
+        textField = [[UITextField alloc] initWithFrame:CGRectMake((tableView.bounds.size.width - 150.0f) - 15.0f, 0.0f, 150.0f, cell.bounds.size.height)];
         textField.backgroundColor = [UIColor clearColor];
         textField.keyboardType = UIKeyboardTypeDecimalPad;
         textField.textAlignment = NSTextAlignmentRight;
         textField.delegate = self;
         textField.inputAccessoryView = toolbar;
+        textField.textColor = [UIColor lightGrayColor];
         [cell.contentView addSubview:textField];
 
         Alarm *alarm = MSHookIvar<Alarm *>(self, "_alarm");
@@ -220,14 +221,7 @@ static void AlarmySaveIntervalSettings(NSString *interval, NSString *alarmId) {
 
 %ctor {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-    
-    // Setup the dictionary of alarmId:interval 
-    NSFileManager *manager = [NSFileManager defaultManager];
-    if (![manager fileExistsAtPath:@"/Library/Application Support/Alarmy"]) {
-        [manager createDirectoryAtPath:@"/Library/Application Support/Alarmy" withIntermediateDirectories:NO attributes:nil error:nil];
-        [manager createFileAtPath:AlarmyMappingsPath contents:nil attributes:nil];
-    }
-
+    NSLog(@"Loading Alarmy");
     %init;
     [pool drain];
 }
