@@ -9,12 +9,12 @@
 
 #import "AlarmyInterfaces.h"
 
-static NSString *const AlarmyMappingsPath   = @"/Library/Application Support/Alarmy/mappings.plist";
-static UITextField *textField		        = nil;
+#define AlarmyMappingsPath      [NSHomeDirectory() stringByAppendingPathComponent:@"/Library/Preferences/in.evilpengu.alarmy.plist"]
+static UITextField *_textField  = nil;
 
 #pragma mark - == Alarmy Private Functions ==
 
-static inline NSInteger AlarmySnoozeIntervalForId(NSString *alarmId) {
+__unused static NSInteger AlarmySnoozeIntervalForId(NSString *alarmId) {
     NSInteger returnValue = NSNotFound;
     if (alarmId.length > 0) {
         NSDictionary *alarmMappingsDict = [[NSDictionary alloc] initWithContentsOfFile:AlarmyMappingsPath];
@@ -27,17 +27,7 @@ static inline NSInteger AlarmySnoozeIntervalForId(NSString *alarmId) {
     return returnValue;
 }
 
-static inline NSMutableDictionary *AlarmyBaseDictionaryForDictionary(NSDictionary *dictionary) {
-    if (dictionary.count > 0) {
-        NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:dictionary];
-        [dict setObject:@(YES) forKey:@"isSnooze"]; 
-        return dict;
-    }
-
-    return nil;
-}
-
-static void AlarmySaveIntervalSettings(NSString *interval, NSString *alarmId) {
+__unused static void AlarmySaveIntervalSettings(NSString *interval, NSString *alarmId) {
     if (alarmId.length > 0) {
         NSMutableDictionary *alarmMappings = [[NSMutableDictionary alloc] initWithContentsOfFile:AlarmyMappingsPath];
         if (alarmMappings == nil) alarmMappings = [[NSMutableDictionary alloc] init];
@@ -54,62 +44,58 @@ static void AlarmySaveIntervalSettings(NSString *interval, NSString *alarmId) {
     }
 }
 
-#pragma mark - == SBApplication Hooks ==
+__unused static UIConcreteLocalNotification *AlarmyModifySnoozeNotification(UIConcreteLocalNotification *notification) {
+    NSDictionary *userInfo = notification.userInfo;
+    if (userInfo.count > 0) {
+        NSInteger snoozeInterval = AlarmySnoozeIntervalForId(userInfo[@"alarmId"]);
+        if (snoozeInterval != NSNotFound) {             
+            NSInteger minuteOffset = (-9 + snoozeInterval);                     
+            if (minuteOffset != 0) {    
+                NSDateComponents *dateComponent = [[NSDateComponents alloc] init];
+                [dateComponent setMinute:minuteOffset]; 
 
-%hook SBApplication
+                NSCalendar *calendar = notification.repeatCalendar;
+                NSDate *date = [calendar dateByAddingComponents:dateComponent toDate:notification.fireDate options:0];
 
-// iOS8 Support
-- (void) scheduleSnoozeNotificationForLocalNotification:(id)notification {
-    if ([objc_getClass("AlarmManager") isAlarmNotification:notification]) {
-        NSMutableDictionary *dict = AlarmyBaseDictionaryForDictionary([notification userInfo]);
-        [notification setUserInfo:dict];
-    }
+                NSLog(@"Alarmy changing fire date %@ to %@", notification.fireDate, date);
+                if (date != nil) [notification setFireDate:date];                   
 
-    %orig(notification);
-}
-
-// iOS7 Support
-- (void) systemLocalNotificationAlertShouldSnooze:(id)alertNotification {
-    SBSystemLocalNotificationAlert *alert = (SBSystemLocalNotificationAlert *)alertNotification;
-    UILocalNotification *notification = (UILocalNotification *)[alert localNotification]; 	
-
-    if ([objc_getClass("AlarmManager") isAlarmNotification:notification]) {
-        NSMutableDictionary *dict = AlarmyBaseDictionaryForDictionary([notification userInfo]);	
-        [notification setUserInfo:dict];
-    }
-
-    %orig(alertNotification);
-}
-
-// iOS7 and iOS8
-- (void) scheduleLocalNotifications:(id)notifications replaceExistingNotifications:(BOOL)replace {
-    if (notifications != nil && [notifications count] > 0) {
-        for (UILocalNotification *notification in notifications) {
-            BOOL shouldSnooze = [notification.userInfo objectForKey:@"isSnooze"] ? [[notification.userInfo objectForKey:@"isSnooze"] boolValue] : NO;
-            if (shouldSnooze) {
-                NSString *alarmId = [notification.userInfo objectForKey:@"alarmId"];
-                NSInteger snoozeInterval = AlarmySnoozeIntervalForId(alarmId); 				
-
-                if (snoozeInterval != NSNotFound) {				
-                    NSInteger minuteOffset = (-9 + snoozeInterval);						
-                    if (minuteOffset != 0) {	
-                        NSDateComponents *dateComponent = [[NSDateComponents alloc] init];
-                        [dateComponent setMinute:minuteOffset]; 
-
-                        NSCalendar *calendar = notification.repeatCalendar;
-                        NSDate *date = [calendar dateByAddingComponents:dateComponent toDate:notification.fireDate options:0];
-
-                        NSLog(@"Alarmy changing fire date %@ to %@", notification.fireDate, date);
-                        if (date != nil) [notification setFireDate:date];					
-
-                        [dateComponent release];
-                    }
-                }
+                [dateComponent release];
             }
         }
     }
 
-    %orig(notifications, replace);
+    return notification;
+}
+
+#pragma mark - == UNLocalNotificationClient Hooks ==
+
+%hook UNLocalNotificationClient
+
+- (void) scheduleSnoozeNotification:(UIConcreteLocalNotification *)notification {
+    notification = AlarmyModifySnoozeNotification(notification);
+    %orig(notification);
+}
+
+%end
+
+#pragma mark - == AlarmManager Hooks ==
+
+%hook AlarmManager 
+
+- (void) removeAlarm:(Alarm *)alarm {
+    AlarmySaveIntervalSettings(nil, alarm.alarmID);
+    %orig;
+}
+
+- (void) setAlarm:(Alarm *)alarm active:(BOOL)active {
+    AlarmySaveIntervalSettings(_textField.text, alarm.alarmID);
+    %orig;
+}
+
+- (void) updateAlarm:(Alarm *)alarm active:(BOOL)active {
+    AlarmySaveIntervalSettings(_textField.text, alarm.alarmID);
+    %orig;
 }
 
 %end
@@ -118,23 +104,35 @@ static void AlarmySaveIntervalSettings(NSString *interval, NSString *alarmId) {
 
 %hook EditAlarmViewController
 
-- (id) initWithAlarm:(id)alarm {
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(keyboardWillShow:)
-                                                 name:UIKeyboardWillShowNotification
-                                               object:nil];
-    return %orig(alarm);
+- (void) viewWillAppear:(BOOL)animated {
+    %orig(animated);
+
+    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+
+    [center addObserver:self
+               selector:@selector(_keyboardWillShow:)
+                   name:UIKeyboardWillShowNotification
+                 object:nil];
+
+    [center addObserver:self
+               selector:@selector(_keyboardWillHide:)
+                   name:UIKeyboardWillHideNotification
+                 object:nil];
+    
 }
 
-- (void) dealloc {
-    [[NSNotificationCenter defaultCenter] removeObserver:self];
-    %orig;
+- (void) viewWillDisappear:(BOOL)animated {
+    %orig(animated);
+
+    [NSNotificationCenter.defaultCenter removeObserver:self];
 }
+
+#pragma mark - == Private New Methods ==
 
 %new 
-- (void) keyboardWillShow:(NSNotification *)notification {
+- (void) _keyboardWillShow:(NSNotification *)notification {
     EditAlarmView *alarmView = MSHookIvar<EditAlarmView *>(self, "_editAlarmView");	
-    [UIView animateWithDuration:0.5f
+    [UIView animateWithDuration:[notification.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue]
                      animations: ^ (void) {
                         CGPoint alarmViewPoint = alarmView.frame.origin;
                         alarmView.frame = CGRectMake(alarmViewPoint.x, alarmViewPoint.y - 245.0f, alarmView.frame.size.width, alarmView.frame.size.height);
@@ -142,26 +140,18 @@ static void AlarmySaveIntervalSettings(NSString *interval, NSString *alarmId) {
 }
 
 %new
-- (void) donePress:(id)sender {
-    if (textField != nil) [textField resignFirstResponder];
-
+- (void) _keyboardWillHide:(NSNotification *)notification {
     EditAlarmView *alarmView = MSHookIvar<EditAlarmView *>(self, "_editAlarmView");
-    [UIView animateWithDuration:0.5f
+    [UIView animateWithDuration:[notification.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue]
                      animations: ^ (void) {
                         CGPoint alarmViewPoint = alarmView.frame.origin;
                         alarmView.frame = CGRectMake(alarmViewPoint.x, alarmViewPoint.y + 245.0f, alarmView.frame.size.width, alarmView.frame.size.height);
                      }];
 }
 
-#pragma mark - == Private Methods ==
-
-- (void) _doneButtonClicked:(id)clicked {
-    Alarm *alarm = MSHookIvar<Alarm *>(self, "_alarm");
-    if (alarm != nil && textField != nil) {
-        AlarmySaveIntervalSettings(textField.text, alarm.alarmId);
-    }
-
-    %orig(clicked);
+%new
+- (void) _donePress:(id)sender {
+    if (_textField != nil) [_textField resignFirstResponder];    
 }
 
 #pragma mark - == UITableViewDelegate ==
@@ -185,26 +175,26 @@ static void AlarmySaveIntervalSettings(NSString *interval, NSString *alarmId) {
         toolbar.barTintColor = [UIColor whiteColor];		
 
         UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
-        UIBarButtonItem *barButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(donePress:)];
+        UIBarButtonItem *barButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(_donePress:)];
         [barButtonItem setTitleTextAttributes:@{NSForegroundColorAttributeName:[UIColor redColor]} forState:UIControlStateNormal];
         [toolbar setItems:@[flexibleSpace, barButtonItem]];
 
-        textField = [[UITextField alloc] initWithFrame:CGRectMake((tableView.bounds.size.width - 150.0f) - 15.0f, 0.0f, 150.0f, cell.bounds.size.height)];
-        textField.backgroundColor = [UIColor clearColor];
-        textField.keyboardType = UIKeyboardTypeDecimalPad;
-        textField.textAlignment = NSTextAlignmentRight;
-        textField.delegate = self;
-        textField.inputAccessoryView = toolbar;
-        textField.textColor = [UIColor lightGrayColor];
-        [cell.contentView addSubview:textField];
+        _textField = [[UITextField alloc] initWithFrame:CGRectMake((tableView.bounds.size.width - 150.0f) - 15.0f, 0.0f, 150.0f, cell.bounds.size.height)];
+        _textField.backgroundColor = [UIColor clearColor];
+        _textField.keyboardType = UIKeyboardTypeDecimalPad;
+        _textField.textAlignment = NSTextAlignmentRight;
+        _textField.delegate = self;
+        _textField.inputAccessoryView = toolbar;
+        _textField.textColor = [UIColor lightGrayColor];
+        [cell.contentView addSubview:_textField];
 
-        Alarm *alarm = MSHookIvar<Alarm *>(self, "_alarm");
+        Alarm *alarm = self.alarm;
         if (alarm != nil) {
-            NSInteger interval = AlarmySnoozeIntervalForId(alarm.alarmId);
-            textField.text =  (interval != NSNotFound ? [NSString stringWithFormat:@"%li", (long)interval] : nil);
+            NSInteger interval = AlarmySnoozeIntervalForId(alarm.alarmID);
+            _textField.text =  (interval != NSNotFound ? [NSString stringWithFormat:@"%li", (long)interval] : nil);
         }
 
-        [textField release];
+        [_textField release];
         [barButtonItem release];
         [flexibleSpace release];
         [toolbar release];
@@ -219,10 +209,11 @@ static void AlarmySaveIntervalSettings(NSString *interval, NSString *alarmId) {
 
 %end
 
-%ctor {
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-    NSLog(@"Loading Alarmy");
-    %init;
-    [pool drain];
-}
+#pragma mark - == Dylib Constructor ==
 
+%ctor {
+    @autoreleasepool {
+        NSLog(@"Loading Alarmy");
+        %init;
+    }
+}
