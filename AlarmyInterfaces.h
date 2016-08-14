@@ -22,6 +22,7 @@
 
 @interface EditAlarmViewController : UIViewController <UITextFieldDelegate>
 	- (Alarm *)alarm;
+	- (void) _updateEditAlarmViewFrameWithNotification:(NSNotification *)notification andWillShow:(BOOL)willShow;
 @end
 
 @interface EditAlarmView : UIView

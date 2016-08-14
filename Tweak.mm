@@ -130,24 +130,28 @@ __unused static UIConcreteLocalNotification *AlarmyModifySnoozeNotification(UICo
 
 #pragma mark - == Private New Methods ==
 
+%new
+- (void) _updateEditAlarmViewFrameWithNotification:(NSNotification *)notification andWillShow:(BOOL)willShow {
+    EditAlarmView *alarmView = MSHookIvar<EditAlarmView *>(self, "_editAlarmView"); 
+    CGPoint alarmViewPoint = alarmView.frame.origin;
+    if (willShow) alarmViewPoint.y -= 245.0f;
+    else alarmViewPoint.y += 245.0f;
+
+    CGRect alarmViewFrame = CGRectMake(alarmViewPoint.x, alarmViewPoint.y, alarmView.frame.size.width, alarmView.frame.size.height);
+    [UIView animateWithDuration:[notification.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue]
+                     animations:^ (void) {
+                        alarmView.frame = alarmViewFrame;
+                    }];
+}
+
 %new 
 - (void) _keyboardWillShow:(NSNotification *)notification {
-    EditAlarmView *alarmView = MSHookIvar<EditAlarmView *>(self, "_editAlarmView");	
-    [UIView animateWithDuration:[notification.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue]
-                     animations: ^ (void) {
-                        CGPoint alarmViewPoint = alarmView.frame.origin;
-                        alarmView.frame = CGRectMake(alarmViewPoint.x, alarmViewPoint.y - 245.0f, alarmView.frame.size.width, alarmView.frame.size.height);
-                    }];
+    [self _updateEditAlarmViewFrameWithNotification:notification andWillShow:YES];
 }
 
 %new
 - (void) _keyboardWillHide:(NSNotification *)notification {
-    EditAlarmView *alarmView = MSHookIvar<EditAlarmView *>(self, "_editAlarmView");
-    [UIView animateWithDuration:[notification.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue]
-                     animations: ^ (void) {
-                        CGPoint alarmViewPoint = alarmView.frame.origin;
-                        alarmView.frame = CGRectMake(alarmViewPoint.x, alarmViewPoint.y + 245.0f, alarmView.frame.size.width, alarmView.frame.size.height);
-                     }];
+    [self _updateEditAlarmViewFrameWithNotification:notification andWillShow:NO];
 }
 
 %new
