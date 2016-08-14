@@ -1,7 +1,8 @@
 /*
  * Alarmy - a tweak to change the snooze for certain alarms
  * Created by James Emrich (EvilPenguin)
- * Version: 0.7.2
+ * Version: 0.8.0
+ * iOS 9 Only 
  *
  * Enjoy (<>..<>)
  *
